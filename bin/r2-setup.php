@@ -77,6 +77,19 @@ $put = s3_request('PUT', $path, 'cors=', $cors, [
     'content-md5'  => base64_encode(md5($cors, true)),
 ]);
 
+if ($put['status'] === 403) {
+    fwrite(STDERR, "CORS se nepodařilo nastavit: token na to nemá právo (HTTP 403).\n\n");
+    fwrite(STDERR, "Zápis do objektů a změna konfigurace bucketu jsou v R2 dvě různá\n");
+    fwrite(STDERR, "oprávnění. Token typu \"Object Read & Write\" umí nahrávat soubory,\n");
+    fwrite(STDERR, "ale na CORS nedosáhne — ten chce \"Admin Read & Write\".\n\n");
+    fwrite(STDERR, "Máš dvě možnosti:\n");
+    fwrite(STDERR, "  a) nastavit CORS ručně: R2 -> $bucket -> Settings -> CORS policy,\n");
+    fwrite(STDERR, "     vzor je v r2-cors.example.json\n");
+    fwrite(STDERR, "  b) vyrobit dočasný Admin token, pustit tenhle skript a token zase smazat\n\n");
+    fwrite(STDERR, "Uploadu ze serveru (worker) se to netýká — CORS řeší jen prohlížeč.\n");
+    exit(1);
+}
+
 if ($put['status'] < 200 || $put['status'] >= 300) {
     fwrite(STDERR, "CORS se nepodařilo nastavit (HTTP {$put['status']}):\n{$put['body']}\n");
     exit(1);

@@ -17,9 +17,16 @@ declare(strict_types=1);
  */
 function s3_endpoint(): string
 {
-    $endpoint = trim(env('R2_ENDPOINT', ''));
+    $endpoint = rtrim(trim(env('R2_ENDPOINT', '')), '/');
     if ($endpoint !== '') {
-        return rtrim($endpoint, '/');
+        // Cloudflare v dashboardu ukazuje S3 adresu i s bucketem na konci
+        // (".../ratatosk"). Klíč si k cestě lepíme sami, takže by z toho
+        // jinak vzniklo "/ratatosk/ratatosk/...". Ten suffix odřízneme.
+        $bucket = '/' . env('R2_BUCKET', '');
+        if ($bucket !== '/' && str_ends_with($endpoint, $bucket)) {
+            $endpoint = substr($endpoint, 0, -strlen($bucket));
+        }
+        return $endpoint;
     }
 
     $account = trim(env('R2_ACCOUNT_ID', ''));
@@ -242,13 +249,21 @@ function s3_request(
 
     $url = "$scheme://$host$path" . ($query !== '' ? "?$query" : '');
     $ch  = curl_init($url);
-    curl_setopt_array($ch, [
+    $opts = [
         CURLOPT_CUSTOMREQUEST  => strtoupper($method),
-        CURLOPT_POSTFIELDS     => $body,
         CURLOPT_HTTPHEADER     => $curlHeaders,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 30,
-    ]);
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ];
+    if ($body !== '') {
+        $opts[CURLOPT_POSTFIELDS] = $body;
+    }
+    if (strtoupper($method) === 'HEAD') {
+        // Bez tohohle curl čeká na tělo, které u HEAD nikdy nepřijde, a vytimeoutuje.
+        $opts[CURLOPT_NOBODY] = true;
+    }
+    curl_setopt_array($ch, $opts);
     $response = curl_exec($ch);
     $status   = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $err      = curl_error($ch);
