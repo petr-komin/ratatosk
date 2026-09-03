@@ -257,13 +257,16 @@ function route_watch(string $id): void
         ? s3_public_url($rec['source_key'])
         : null;
 
+    $viewer = current_user();
+
     render('watch', [
-        'title'     => $rec['title'],
-        'rec'       => $rec,
-        'viewer'    => current_user(),
-        'videoUrl'  => $rec['mp4_key'] ? s3_public_url($rec['mp4_key']) : null,
-        'sourceUrl' => $sourceUrl,
-        'mainClass' => 'watch-main',
+        'title'         => $rec['title'],
+        'rec'           => $rec,
+        'user'          => $viewer,
+        'videoUrl'      => $rec['mp4_key'] ? s3_public_url($rec['mp4_key']) : null,
+        'sourceUrl'     => $sourceUrl,
+        'mainClass'     => 'watch-main',
+        'showLoginLink' => $viewer === null,
     ]);
 }
 

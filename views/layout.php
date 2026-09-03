@@ -23,6 +23,10 @@
                 <button class="btn btn-quiet" type="submit">Odhlásit</button>
             </form>
         </nav>
+    <?php elseif (!empty($showLoginLink)): ?>
+        <nav>
+            <a class="btn btn-primary" href="/login">Přihlásit se</a>
+        </nav>
     <?php endif; ?>
 </header>
 

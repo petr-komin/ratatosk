@@ -42,10 +42,3 @@
 
 <?php endif; ?>
 
-<div class="watch-foot">
-    <?php if ($viewer): ?>
-        <a class="btn btn-primary" href="/record">+ Nahrát další záznam</a>
-    <?php else: ?>
-        <a class="btn btn-primary" href="/login">Přihlásit se</a>
-    <?php endif; ?>
-</div>
