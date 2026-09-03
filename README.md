@@ -254,7 +254,9 @@ Schválně nedělá to, co patří rootovi:
 
 - **databázi a uživatele** (`CREATE USER` / `CREATE DATABASE` + řádek
   v `pg_hba.conf` pro docker bridge — skript vypíše přesné příkazy)
-- **nginx** podle `nginx.example.conf`
+- **nginx** podle `nginx.example.conf` — nezapomeň přepsat `$app_root`;
+  leží-li projekt v domovském adresáři, ještě `chmod o+x /home/<uzivatel>`,
+  jinak se tam nginx neprokouše
 - **certifikát** (`certbot --nginx -d <doména>`)
 - **CORS** na R2 bucketu pro produkční origin
 
