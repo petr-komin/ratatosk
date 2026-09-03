@@ -8,6 +8,7 @@
     progressWrap: $('progressWrap'), progressBar: $('progressBar'),
     surface: $('surface'), excludeSelf: $('excludeSelf'),
     micSelect: $('micSelect'), micTest: $('micTest'), micHint: $('micHint'),
+    micCount: $('micCount'), permNote: $('permNote'), micPerm: $('micPerm'),
     meterBar: $('meterBar'), wantSystemAudio: $('wantSystemAudio'),
     title: $('title'),
   };
@@ -49,8 +50,9 @@
 
   /* -------------------------------------------------------- výběr mikrofonu */
 
-  // Bez udělené permission vrací prohlížeč zařízení s prázdnými labely —
-  // teprve po getUserMedia se dá vypsat, který mikrofon je který.
+  // Dokud uživatel nepovolí přístup, vrací prohlížeč jediný anonymní vstup
+  // s prázdným deviceId i labelem — ochrana proti fingerprintingu. Skutečná
+  // zařízení (webkamery, zvukovky) se objeví teprve po udělení permission.
   async function listMics(preferId) {
     let devices = [];
     try {
@@ -58,22 +60,26 @@
         .filter((d) => d.kind === 'audioinput');
     } catch {
       els.micSelect.innerHTML = '<option value="">Zařízení nelze načíst</option>';
-      return;
+      return false;
     }
 
     if (!devices.length) {
-      els.micSelect.innerHTML = '<option value="">Žádný mikrofon</option>';
-      return;
+      els.micSelect.innerHTML = '<option value="none">Žádné zvukové zařízení</option>';
+      els.micCount.textContent = '';
+      return false;
     }
 
-    const unnamed = devices.every((d) => !d.label);
+    // Windows/PulseAudio přidávají zástupce "default" a "communications",
+    // které jen ukazují na jiné zařízení ze seznamu — jsou jen matoucí.
+    const alias = /^(default|communications)$/;
+    const real = devices.filter((d) => !alias.test(d.deviceId));
+    const list = real.length ? real : devices;
+
+    const named = list.some((d) => d.label);
     els.micSelect.innerHTML = '';
-
-    const none = new Option('Bez mikrofonu (jen obraz)', 'none');
-    els.micSelect.add(none);
-
-    devices.forEach((d, i) => {
-      els.micSelect.add(new Option(d.label || `Mikrofon ${i + 1}`, d.deviceId));
+    els.micSelect.add(new Option('Bez mikrofonu (jen obraz)', 'none'));
+    list.forEach((d, i) => {
+      els.micSelect.add(new Option(d.label || `Zvukový vstup ${i + 1}`, d.deviceId));
     });
 
     const wanted = preferId || prefs.micId;
@@ -83,12 +89,33 @@
       els.micSelect.selectedIndex = 1;
     }
 
-    if (unnamed) {
-      els.micHint.innerHTML =
-        'Prohlížeč zatím neprozradil názvy mikrofonů. Klikni na <strong>Vyzkoušet</strong> ' +
-        '— po povolení přístupu se seznam doplní.';
-    }
+    els.permNote.hidden = named;
+    // "zařízení" má stejný tvar v jednotném i množném čísle, tvar s dvojtečkou
+    // se tedy nemůže rozejít s počtem
+    els.micCount.textContent = named ? `Zvukových zařízení: ${list.length}` : '';
+
+    return named;
   }
+
+  /** Jediný způsob, jak z prohlížeče dostat názvy zařízení, je sáhnout na mikrofon. */
+  async function revealDevices() {
+    els.micPerm.disabled = true;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach((t) => t.stop());
+    } catch (err) {
+      els.micPerm.disabled = false;
+      say(err.name === 'NotAllowedError'
+        ? 'Přístup k mikrofonu je zamítnutý. Povol ho v prohlížeči (ikona vlevo v adresním řádku) a načti stránku znovu.'
+        : 'Mikrofon se nepodařilo otevřít: ' + err.name, 'error');
+      return;
+    }
+    els.micPerm.disabled = false;
+    await listMics();
+    say('');
+  }
+
+  els.micPerm.addEventListener('click', revealDevices);
 
   /* ------------------------------------------------------- ukazatel hlasitosti */
 
@@ -116,7 +143,7 @@
     }
 
     // Labely jsou k dispozici až teď — seznam přepíšeme, ať jsou vidět názvy.
-    await listMics(id);
+    await listMics(id || els.micSelect.value);
 
     audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
     await audioCtx.resume();
@@ -373,5 +400,13 @@
   } else {
     listMics();
     navigator.mediaDevices.addEventListener?.('devicechange', () => listMics(els.micSelect.value));
+
+    // Když už permission jednou padla, seznam se dá naplnit bez ptaní.
+    navigator.permissions?.query({ name: 'microphone' })
+      .then((p) => {
+        if (p.state === 'granted') listMics();
+        p.onchange = () => listMics(els.micSelect.value);
+      })
+      .catch(() => { /* Firefox tenhle dotaz neumí — zůstane tlačítko */ });
   }
 })();

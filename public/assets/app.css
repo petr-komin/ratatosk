@@ -137,3 +137,9 @@ select {
 .meterRow { display: flex; align-items: center; gap: .75rem; margin: .5rem 0; }
 .meter { flex: 1; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .meter > div { height: 100%; width: 0; background: var(--ok); transition: width .06s linear; }
+
+.permNote {
+  margin: .5rem 0 .9rem; padding: .8rem .9rem;
+  background: var(--bg); border: 1px dashed var(--line); border-radius: 8px;
+}
+.permNote p { margin: 0 0 .7rem; font-size: .8125rem; line-height: 1.5; color: var(--dim); }

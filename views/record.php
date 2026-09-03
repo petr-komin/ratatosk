@@ -31,16 +31,28 @@
     <fieldset class="group">
         <legend>Zvuk</legend>
 
+        <div class="permNote" id="permNote" hidden>
+            <p>
+                Prohlížeč zatím neprozradil, jaká zvuková zařízení máš — dokud
+                nepovolíš přístup, nabídne jen jeden obecný vstup. Není to tím,
+                že by zařízení chyběla; je to ochrana proti fingerprintingu.
+            </p>
+            <button class="btn btn-primary" id="micPerm" type="button">
+                Zobrazit moje mikrofony
+            </button>
+        </div>
+
         <label class="row">Mikrofon
             <select id="micSelect"><option value="">Načítám…</option></select>
         </label>
+        <p class="hint" id="micCount"></p>
 
         <div class="meterRow">
             <div class="meter"><div id="meterBar"></div></div>
             <button class="btn btn-quiet" id="micTest" type="button">Vyzkoušet</button>
         </div>
         <p class="hint" id="micHint">
-            Zkouškou ověříš, že mluvíš do toho správného mikrofonu — ručička se
+            Zkouškou ověříš, že mluvíš do toho správného zařízení — ukazatel se
             musí hýbat.
         </p>
 

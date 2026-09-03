@@ -37,9 +37,15 @@ obrazovka), kterou dialog předvybere, plus možnost tuhle kartu z dialogu
 vyřadit, ať omylem nenatočíš samotný Ratatosk.
 
 **Zvuk vybrat jde.** Formulář vypíše dostupné mikrofony a umí konkrétní
-vynutit přes `deviceId`. Tlačítko *Vyzkoušet* rozhýbe ukazatel hlasitosti —
-zároveň je to způsob, jak si vyžádat permission, bez které prohlížeč názvy
-zařízení vůbec neprozradí.
+vynutit přes `deviceId`. Tlačítko *Vyzkoušet* rozhýbe ukazatel hlasitosti, ať
+si ověříš, že mluvíš do toho správného zařízení.
+
+Dokud ale nepovolíš přístup k mikrofonu, prohlížeč **žádná zařízení
+neprozradí** — vrátí jediný anonymní vstup s prázdným názvem i `deviceId`. Je
+to ochrana proti fingerprintingu, ne chybějící hardware. Formulář proto v tom
+stavu ukáže výzvu *Zobrazit moje mikrofony*; po povolení se seznam naplní
+skutečnými názvy (webkamery, zvukovky) a zástupci `default` / `communications`,
+kteří jen ukazují na jiné zařízení ze seznamu, se odfiltrují.
 
 Volitelně jde přibrat i zvuk sdílené plochy. Když dorazí obojí, smíchají se
 přes Web Audio API do jedné stopy, protože `MediaRecorder` víc zvukových stop
