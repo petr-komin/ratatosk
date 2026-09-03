@@ -11,6 +11,25 @@ declare(strict_types=1);
  * Content-Type, aniž by podpis rozbil.
  */
 
+/**
+ * Endpoint S3 API. Buď rovnou R2_ENDPOINT, nebo se složí z R2_ACCOUNT_ID —
+ * account id je to, co člověk mívá po ruce z jiných projektů.
+ */
+function s3_endpoint(): string
+{
+    $endpoint = trim(env('R2_ENDPOINT', ''));
+    if ($endpoint !== '') {
+        return rtrim($endpoint, '/');
+    }
+
+    $account = trim(env('R2_ACCOUNT_ID', ''));
+    if ($account === '') {
+        throw new RuntimeException('Nastav v .env buď R2_ACCOUNT_ID, nebo R2_ENDPOINT.');
+    }
+
+    return "https://$account.r2.cloudflarestorage.com";
+}
+
 function s3_uri_encode_key(string $key): string
 {
     // rawurlencode celý klíč, ale lomítka nechat jako oddělovače segmentů
@@ -19,7 +38,7 @@ function s3_uri_encode_key(string $key): string
 
 function s3_presign(string $method, string $key, ?int $expires = null): string
 {
-    $endpoint = rtrim(env('R2_ENDPOINT'), '/');
+    $endpoint = s3_endpoint();
     $bucket   = env('R2_BUCKET');
     $region   = env('R2_REGION', 'auto');
     $access   = env('R2_ACCESS_KEY_ID');
@@ -28,7 +47,7 @@ function s3_presign(string $method, string $key, ?int $expires = null): string
 
     $host = parse_url($endpoint, PHP_URL_HOST);
     if (!is_string($host)) {
-        throw new RuntimeException('R2_ENDPOINT není platná URL');
+        throw new RuntimeException('Endpoint R2 není platná URL: ' . $endpoint);
     }
     $scheme = parse_url($endpoint, PHP_URL_SCHEME) ?: 'https';
 
@@ -147,4 +166,97 @@ function s3_delete(string $key): bool
     curl_close($ch);
 
     return $code >= 200 && $code < 300;
+}
+
+/**
+ * -------------------------------------------- podepsaný požadavek na S3 API
+ *
+ * Presigned URL řeší jen práci s objekty. Na správu bucketu (vytvoření, CORS)
+ * je potřeba podpis v hlavičce, protože se podepisuje i tělo požadavku.
+ */
+function s3_request(
+    string $method,
+    string $path,
+    string $query = '',
+    string $body = '',
+    array $extraHeaders = []
+): array {
+    $endpoint = s3_endpoint();
+    $region   = env('R2_REGION', 'auto');
+    $access   = env('R2_ACCESS_KEY_ID');
+    $secret   = env('R2_SECRET_ACCESS_KEY');
+
+    $host   = parse_url($endpoint, PHP_URL_HOST);
+    $scheme = parse_url($endpoint, PHP_URL_SCHEME) ?: 'https';
+
+    $now       = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    $amzDate   = $now->format('Ymd\THis\Z');
+    $dateStamp = $now->format('Ymd');
+    $payloadHash = hash('sha256', $body);
+
+    $headers = array_change_key_case($extraHeaders) + [
+        'host'                 => $host,
+        'x-amz-content-sha256' => $payloadHash,
+        'x-amz-date'           => $amzDate,
+    ];
+    ksort($headers);
+
+    $canonicalHeaders = '';
+    foreach ($headers as $name => $value) {
+        $canonicalHeaders .= $name . ':' . trim((string) $value) . "\n";
+    }
+    $signedHeaders = implode(';', array_keys($headers));
+
+    $canonicalRequest = implode("\n", [
+        strtoupper($method),
+        $path,
+        $query,
+        $canonicalHeaders,
+        $signedHeaders,
+        $payloadHash,
+    ]);
+
+    $scope = "$dateStamp/$region/s3/aws4_request";
+    $stringToSign = implode("\n", [
+        'AWS4-HMAC-SHA256',
+        $amzDate,
+        $scope,
+        hash('sha256', $canonicalRequest),
+    ]);
+
+    $kDate    = hash_hmac('sha256', $dateStamp, 'AWS4' . $secret, true);
+    $kRegion  = hash_hmac('sha256', $region, $kDate, true);
+    $kService = hash_hmac('sha256', 's3', $kRegion, true);
+    $kSigning = hash_hmac('sha256', 'aws4_request', $kService, true);
+    $signature = hash_hmac('sha256', $stringToSign, $kSigning);
+
+    $auth = "AWS4-HMAC-SHA256 Credential=$access/$scope, "
+          . "SignedHeaders=$signedHeaders, Signature=$signature";
+
+    $curlHeaders = ["Authorization: $auth"];
+    foreach ($headers as $name => $value) {
+        if ($name !== 'host') {
+            $curlHeaders[] = "$name: $value";
+        }
+    }
+
+    $url = "$scheme://$host$path" . ($query !== '' ? "?$query" : '');
+    $ch  = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST  => strtoupper($method),
+        CURLOPT_POSTFIELDS     => $body,
+        CURLOPT_HTTPHEADER     => $curlHeaders,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+    ]);
+    $response = curl_exec($ch);
+    $status   = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err      = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false) {
+        throw new RuntimeException("Požadavek na R2 selhal: $err");
+    }
+
+    return ['status' => $status, 'body' => (string) $response];
 }

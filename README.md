@@ -96,13 +96,63 @@ openssl rand -hex 16               # → INVITE_CODE
 
 ### 3. R2
 
-- Vytvoř bucket a **API token** typu *Object Read & Write* → to jsou
-  `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`.
-- Bucketu nastav **veřejný přístup přes vlastní doménu** (Settings → Public
-  access → Custom domain) a tu doménu dej do `R2_PUBLIC_BASE_URL`.
-- **CORS je povinný**, jinak upload z prohlížeče spadne na síťové chybě.
-  Vzor je v [`r2-cors.example.json`](r2-cors.example.json) — jen přepiš origin
-  za svou doménu a nahraj v Settings → CORS policy.
+Do `.env` patří pět údajů. Když už R2 v jiném projektu používáš, přenesou se
+skoro všechny:
+
+| tvoje proměnná | v Ratatosku | přenosné? |
+|---|---|---|
+| `CF_R2_ACCOUNT_ID` | `R2_ACCOUNT_ID` | ano — účet je společný |
+| `CF_R2_ACCESS_KEY_ID` | `R2_ACCESS_KEY_ID` | ano, pokud token vidí i nový bucket |
+| `CF_R2_SECRET_ACCESS_KEY` | `R2_SECRET_ACCESS_KEY` | ano, dtto |
+| `CF_R2_BUCKET` | `R2_BUCKET` | vlastní |
+| `CF_R2_PUBLIC_URL` | `R2_PUBLIC_BASE_URL` | **ne** — viz níž |
+
+`R2_ENDPOINT` vyplňovat nemusíš, složí se z `R2_ACCOUNT_ID`.
+
+**Veřejná URL je vázaná na jeden konkrétní bucket** a sdílet se nedá. Nový
+bucket si tedy vždycky žádá vlastní adresu — buď další subdoménu, nebo
+generickou `r2.dev`, kterou Cloudflare vygeneruje sám.
+
+**API token** musí na ten bucket dosáhnout. Tokeny jdou omezit na konkrétní
+bucket; když je ten tvůj takhle zúžený, na novém dostaneš HTTP 403 a musíš
+vyrobit nový token (*Object Read & Write*).
+
+#### Bucket a CORS skriptem
+
+Bucket **sám nevznikne** — appka ho nezakládá, upload do neexistujícího
+bucketu jen selže. Vytvořit ho i s CORS umí přiložený skript, klíči, které
+už máš:
+
+```bash
+docker compose exec -T app php bin/r2-setup.php
+```
+
+Bucket založí, když chybí, nastaví CORS podle `APP_URL` a přečte pravidlo
+zpátky na ověření. Další origins se přidají jako argumenty:
+
+```bash
+docker compose exec -T app php bin/r2-setup.php http://localhost:8099
+```
+
+**CORS není volitelný** — bez něj upload z prohlížeče spadne na síťové chybě.
+
+#### Jediný krok, který skript nezvládne
+
+Zapnout veřejný přístup. Na to S3 klíče nestačí, ovládá se to jen přes
+Cloudflare dashboard (nebo Cloudflare API token, což je jiný druh přihlášení
+než S3 klíče):
+
+> R2 → tvůj bucket → **Settings** → **Public access**
+
+Zvol jedno:
+
+- **Public Development URL** — jedno tlačítko, dostaneš `https://pub-….r2.dev`.
+  Žádná doména, žádný DNS. Cloudflare ji ale rate-limituje a označuje za
+  vývojovou; na dvě videa týdně bohatě stačí.
+- **Custom Domain** — subdoména, kterou si nastavíš (`videa.tvoje.cz`). Bez
+  limitů a jde přes CDN, ale je to o pár kroků víc.
+
+Výslednou adresu vlož do `.env` jako `R2_PUBLIC_BASE_URL`.
 
 ### 4. Start
 
