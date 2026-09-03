@@ -21,6 +21,11 @@ services:
       PHP_CLI_SERVER_WORKERS: 4
     ports:
       - "127.0.0.1:${DEV_PORT:-8099}:8080"
+    # Konfigurace jde do prostředí kontejneru, ne přes čtení souboru —
+    # .env tak může zůstat 600 a php-fpm workeři (www-data) na něj nemusí.
+    env_file:
+      - .env
+
     volumes:
       - .:/var/www/html
     depends_on:

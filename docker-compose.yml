@@ -14,6 +14,11 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+    # Konfigurace jde do prostředí kontejneru, ne přes čtení souboru —
+    # .env tak může zůstat 600 a php-fpm workeři (www-data) na něj nemusí.
+    env_file:
+      - .env
+
     volumes:
       # Kód sdílený s hostem — nginx z něj servíruje statiku pod stejnou cestou.
       - .:/var/www/html

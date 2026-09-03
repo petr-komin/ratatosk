@@ -3,6 +3,11 @@ declare(strict_types=1);
 
 /**
  * Minimalistický .env loader. Žádná závislost, žádný composer.
+ *
+ * Soubor je pohodlí pro CLI a vývoj, ne jediný zdroj pravdy. V kontejneru
+ * ho compose načte přes `env_file` do prostředí procesu, takže .env může
+ * zůstat s právy 600 pro vlastníka — php-fpm workeři běží pod www-data
+ * a na soubor by nedosáhli.
  */
 function env_load(string $path): void
 {
@@ -13,7 +18,9 @@ function env_load(string $path): void
     $loaded = true;
 
     if (!is_readable($path)) {
-        throw new RuntimeException("Chybí konfigurace: $path (zkopíruj .env.example)");
+        // Nevadí, pokud konfigurace dorazila prostředím. Když ne, ozve se
+        // env() u první chybějící položky, a to konkrétněji než tenhle soubor.
+        return;
     }
 
     foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
@@ -38,10 +45,20 @@ function env_load(string $path): void
 
 function env(string $key, ?string $default = null): string
 {
-    $val = $_ENV[$key] ?? $default;
+    // variables_order nemusí do $_ENV prostředí vůbec pustit, proto getenv().
+    $val = $_ENV[$key] ?? null;
     if ($val === null) {
-        throw new RuntimeException("Chybí povinná položka v .env: $key");
+        $fromEnv = getenv($key);
+        $val = $fromEnv === false ? $default : $fromEnv;
     }
+
+    if ($val === null) {
+        throw new RuntimeException(
+            "Chybí povinná položka konfigurace: $key "
+            . '(zkontroluj .env, případně env_file v docker-compose.yml)'
+        );
+    }
+
     return $val;
 }
 

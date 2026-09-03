@@ -15,6 +15,14 @@
 
 set -euo pipefail
 
+# Výstup jde na obrazovku i do souboru — když se okno zavře, dá se dočíst.
+LOG="${DEPLOY_LOG:-deploy.log}"
+if [ -z "${RATATOSK_TEE:-}" ]; then
+    export RATATOSK_TEE=1
+    printf '\n===== %s =====\n' "$(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG"
+    exec > >(tee -a "$LOG") 2>&1
+fi
+
 HOST="${DEPLOY_HOST:-manx@a4.arthur.city}"
 DIR="${DEPLOY_DIR:-/home/manx/ratatosk}"
 MODE="${1:-deploy}"
@@ -167,7 +175,19 @@ fi
 
 # ------------------------------------------------------------------ cron
 
-bold "6. Cron na překódování"
+bold "6. Kontrola běhu"
+
+# Nutně jako www-data: root přečte i .env s právy 600, takže by kontrola
+# pod rootem přehlédla přesně tu chybu, kvůli které appka vracela 500.
+if remote "cd '$DIR' && docker compose exec -u www-data -T app php -r 'require \"/var/www/html/src/bootstrap.php\"; db()->query(\"SELECT 1\"); echo \"ok\";'" >/dev/null 2>&1; then
+    ok "appka nabootuje pod www-data a vidí na databázi"
+else
+    echo
+    remote "cd '$DIR' && docker compose exec -u www-data -T app php -r 'require \"/var/www/html/src/bootstrap.php\"; db()->query(\"SELECT 1\");'" 2>&1 | tail -5
+    die "appka pod www-data nenabootuje — nginx by dostával 500"
+fi
+
+bold "7. Cron na překódování"
 
 CRON="* * * * * cd $DIR && /usr/bin/docker compose exec -T app php bin/worker.php >> $DIR/worker.log 2>&1"
 if remote "crontab -l 2>/dev/null | grep -Fq 'ratatosk'" ; then
