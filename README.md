@@ -234,6 +234,30 @@ spuštěním.
 docker compose -f compose.dev.yml down -v   # -v smaže i dev databázi
 ```
 
+## Nasazení
+
+```bash
+./deploy.sh --check     # jen ověří prostředí na serveru, nic nemění
+./deploy.sh             # nasadí
+./deploy.sh --no-build  # jen kód, bez přestavby image
+```
+
+Cíl je `manx@a4.arthur.city:/home/manx/ratatosk`, dá se přebít přes
+`DEPLOY_HOST` a `DEPLOY_DIR`.
+
+Skript ověří prostředí (docker, compose, Postgres, místo na disku), přenese
+kód rsyncem, postaví a nastartuje kontejner, spustí migraci a přidá cron na
+workera. **`.env` na serveru nikdy nepřepíše** — při prvním běhu ho založí
+z `.env.example` a zastaví se, aby ses k němu dostal.
+
+Schválně nedělá to, co patří rootovi:
+
+- **databázi a uživatele** (`CREATE USER` / `CREATE DATABASE` + řádek
+  v `pg_hba.conf` pro docker bridge — skript vypíše přesné příkazy)
+- **nginx** podle `nginx.example.conf`
+- **certifikát** (`certbot --nginx -d <doména>`)
+- **CORS** na R2 bucketu pro produkční origin
+
 ## Provoz
 
 ```bash
