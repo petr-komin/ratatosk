@@ -250,10 +250,18 @@ function route_watch(string $id): void
         return;
     }
 
+    // Dokud MP4 není (nebo se nepovedlo), má smysl nabídnout původní WebM —
+    // čeká se jen kvůli Safari, ostatní prohlížeče ho přehrají rovnou.
+    // U 'pending' ne: upload ještě běží, soubor by byl neúplný.
+    $sourceUrl = in_array($rec['status'], ['uploaded', 'transcoding', 'failed'], true)
+        ? s3_public_url($rec['source_key'])
+        : null;
+
     render('watch', [
-        'title'    => $rec['title'],
-        'rec'      => $rec,
-        'videoUrl' => $rec['mp4_key'] ? s3_public_url($rec['mp4_key']) : null,
+        'title'     => $rec['title'],
+        'rec'       => $rec,
+        'videoUrl'  => $rec['mp4_key'] ? s3_public_url($rec['mp4_key']) : null,
+        'sourceUrl' => $sourceUrl,
     ]);
 }
 

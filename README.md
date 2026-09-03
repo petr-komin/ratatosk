@@ -285,6 +285,16 @@ PHP workeři se spawnou na request a po 10 s nečinnosti umřou
 Sdílecí stránka `/w/<id>` funguje i před dokončením — ukáže „zpracovává se"
 a sama se obnoví, jakmile je MP4 na světě. Odkaz tedy jde poslat hned.
 
+Čeká se ale jen kvůli Safari. Prohlížečům, které WebM přehrají (Chrome,
+Firefox, Edge), stránka rovnou nabídne **původní záznam** a nemusí na
+překódování čekat vůbec; ověřuje se to přes `canPlayType`, takže v Safari
+se nabídka neukáže. Nabízí se i u stavu `failed` — když ffmpeg selže, je
+původní WebM pořád k dispozici a záznam tím není ztracený. U `pending` ne,
+tam upload ještě běží a soubor by byl neúplný.
+
+Kdo se dívá na původní verzi a mezitím doběhne překódování, nedostane
+reload uprostřed přehrávání — jen nenápadnou nabídku přepnout.
+
 ## Co tu schválně není
 
 Účty nad rámec e-mail + heslo, workspacy, komentáře, analytika, editace videa,

@@ -143,3 +143,12 @@ select {
   background: var(--bg); border: 1px dashed var(--line); border-radius: 8px;
 }
 .permNote p { margin: 0 0 .7rem; font-size: .8125rem; line-height: 1.5; color: var(--dim); }
+
+.fallback {
+  margin: 1.25rem 0 0; padding: .9rem 1rem;
+  background: var(--bg); border: 1px dashed var(--line); border-radius: 8px;
+}
+.fallback p { margin: 0 0 .75rem; font-size: .875rem; line-height: 1.55; color: var(--dim); }
+.readyNote { margin-top: 1rem; padding: .75rem 1rem; border-radius: 8px;
+             background: var(--bg); border: 1px solid var(--line); }
+.readyNote p { margin: 0; font-size: .875rem; }
