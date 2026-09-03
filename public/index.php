@@ -260,8 +260,10 @@ function route_watch(string $id): void
     render('watch', [
         'title'     => $rec['title'],
         'rec'       => $rec,
+        'viewer'    => current_user(),
         'videoUrl'  => $rec['mp4_key'] ? s3_public_url($rec['mp4_key']) : null,
         'sourceUrl' => $sourceUrl,
+        'mainClass' => 'watch-main',
     ]);
 }
 

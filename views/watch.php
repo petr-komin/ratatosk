@@ -1,16 +1,18 @@
-<div class="card">
+<div class="watch-head">
     <h1><?= e($rec['title']) ?></h1>
     <p class="dim">
         Nahrál <?= e($rec['author']) ?>,
         <?= e(format_dt($rec['created_at'])) ?>
     </p>
+</div>
 
 <?php if ($rec['status'] === 'ready' && $videoUrl): ?>
 
-    <video controls playsinline preload="metadata" src="<?= e($videoUrl) ?>"></video>
+    <video class="watch-video" controls playsinline preload="metadata" src="<?= e($videoUrl) ?>"></video>
 
 <?php else: ?>
 
+    <div class="watch-body">
     <?php if ($rec['status'] === 'failed'): ?>
         <p class="error">Překódování do MP4 selhalo.</p>
     <?php else: ?>
@@ -32,10 +34,18 @@
                 Přehrát původní záznam
             </button>
         </div>
-        <video id="sourcePlayer" controls playsinline preload="none" hidden></video>
+        <video id="sourcePlayer" class="watch-video" controls playsinline preload="none" hidden></video>
     <?php endif; ?>
+    </div>
 
     <script src="/assets/watch.js"></script>
 
 <?php endif; ?>
+
+<div class="watch-foot">
+    <?php if ($viewer): ?>
+        <a class="btn btn-primary" href="/record">+ Nahrát další záznam</a>
+    <?php else: ?>
+        <a class="btn btn-primary" href="/login">Přihlásit se</a>
+    <?php endif; ?>
 </div>

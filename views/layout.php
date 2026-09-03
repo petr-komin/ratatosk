@@ -26,7 +26,7 @@
     <?php endif; ?>
 </header>
 
-<main>
+<main<?= !empty($mainClass) ? ' class="' . e($mainClass) . '"' : '' ?>>
 <?php require __DIR__ . '/' . $view . '.php'; ?>
 </main>
 </body>

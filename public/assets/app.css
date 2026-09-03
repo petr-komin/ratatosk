@@ -42,6 +42,19 @@ a { color: var(--accent); }
 .who { color: var(--dim); font-size: .875rem; }
 
 main { max-width: 860px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+
+/* Přehrávací stránka: video jde přes celou šířku okna pod navigační lištou,
+   text kolem něj zůstává v čitelném sloupci jako zbytek appky. */
+.watch-main { max-width: none; margin: 0; padding: 0 0 3rem; }
+.watch-head, .watch-body, .watch-foot {
+  max-width: 860px; margin: 0 auto; padding-left: 1.25rem; padding-right: 1.25rem;
+}
+.watch-head { padding-top: 1.5rem; }
+.watch-foot { padding-top: 1.5rem; }
+.watch-video {
+  display: block; width: 100%; height: auto; margin: 1.25rem 0 0;
+  background: #000; border-radius: 0;
+}
 h1 { font-size: 1.35rem; margin: 0 0 1rem; }
 
 .card {
