@@ -14,3 +14,14 @@ document.addEventListener('click', async (e) => {
   btn.textContent = 'Zkopírováno';
   setTimeout(() => { btn.textContent = original; }, 1500);
 });
+
+// Mazání je nevratné (smaže i objekty v R2), takže si vyžádá potvrzení.
+document.addEventListener('submit', (e) => {
+  const form = e.target.closest('.delete-form');
+  if (!form) return;
+
+  const title = form.dataset.title || 'tento záznam';
+  if (!confirm(`Smazat záznam „${title}“? Tohle nejde vrátit zpět.`)) {
+    e.preventDefault();
+  }
+});

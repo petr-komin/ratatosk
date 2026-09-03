@@ -33,7 +33,8 @@
                     <button class="btn btn-quiet copy" data-url="<?= e(share_url($r['id'])) ?>">Kopírovat odkaz</button>
                 <?php endif; ?>
                 <?php if ((int) $r['user_id'] === (int) $user['id']): ?>
-                    <form method="post" action="/recordings/<?= e($r['id']) ?>/delete" class="inline">
+                    <form method="post" action="/recordings/<?= e($r['id']) ?>/delete"
+                          class="inline delete-form" data-title="<?= e($r['title']) ?>">
                         <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
                         <button class="btn btn-quiet danger" type="submit">Smazat</button>
                     </form>
