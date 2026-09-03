@@ -2,81 +2,218 @@
   'use strict';
 
   const $ = (id) => document.getElementById(id);
-  const startBtn = $('start');
-  const stopBtn = $('stop');
-  const stateEl = $('state');
-  const preview = $('preview');
-  const timerEl = $('timer');
-  const progressWrap = $('progressWrap');
-  const progressBar = $('progressBar');
+  const els = {
+    start: $('start'), stop: $('stop'), state: $('state'), sources: $('sources'),
+    preview: $('preview'), timer: $('timer'),
+    progressWrap: $('progressWrap'), progressBar: $('progressBar'),
+    surface: $('surface'), excludeSelf: $('excludeSelf'),
+    micSelect: $('micSelect'), micTest: $('micTest'), micHint: $('micHint'),
+    meterBar: $('meterBar'), wantSystemAudio: $('wantSystemAudio'),
+    title: $('title'),
+  };
 
-  let recorder = null;
-  let chunks = [];
-  let tracks = [];
-  let startedAt = 0;
-  let timerId = null;
+  const PREFS = 'ratatosk.prefs';
+  let recorder = null, chunks = [], startedAt = 0, timerId = null;
+  let liveTracks = [], audioCtx = null, meterStream = null, meterRaf = 0;
 
   const say = (msg, cls = '') => {
-    stateEl.textContent = msg;
-    stateEl.className = 'state ' + cls;
+    els.state.textContent = msg;
+    els.state.className = 'state ' + cls;
   };
 
-  // Prohlížeče se liší v tom, co MediaRecorder umí — bereme první podporovaný.
-  const pickMimeType = () => {
-    const candidates = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm',
-    ];
-    return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || '';
+  /* ------------------------------------------------ zapamatovaná nastavení */
+
+  const loadPrefs = () => {
+    let p = {};
+    try { p = JSON.parse(localStorage.getItem(PREFS) || '{}'); } catch { /* nevadí */ }
+    if (p.surface) els.surface.value = p.surface;
+    if (typeof p.excludeSelf === 'boolean') els.excludeSelf.checked = p.excludeSelf;
+    if (typeof p.systemAudio === 'boolean') els.wantSystemAudio.checked = p.systemAudio;
+    return p;
   };
 
-  const stopAllTracks = () => {
-    tracks.forEach((t) => t.stop());
-    tracks = [];
-    preview.srcObject = null;
-  };
-
-  const tick = () => {
-    const s = Math.floor((Date.now() - startedAt) / 1000);
-    timerEl.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  };
-
-  startBtn.addEventListener('click', async () => {
-    startBtn.disabled = true;
-    say('Vyber zdroj v dialogu prohlížeče…');
-
-    let display, mic;
+  const savePrefs = () => {
     try {
-      // Zvuk obrazovky neřešíme, komentář bereme z mikrofonu — spolehlivější.
-      display = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'browser' },
-        audio: false,
-      });
-    } catch (err) {
-      startBtn.disabled = false;
-      say('Výběr zdroje zrušen.', 'error');
+      localStorage.setItem(PREFS, JSON.stringify({
+        surface: els.surface.value,
+        excludeSelf: els.excludeSelf.checked,
+        systemAudio: els.wantSystemAudio.checked,
+        micId: els.micSelect.value,
+      }));
+    } catch { /* privátní okno, nevadí */ }
+  };
+
+  const prefs = loadPrefs();
+  [els.surface, els.excludeSelf, els.wantSystemAudio, els.micSelect]
+    .forEach((el) => el.addEventListener('change', savePrefs));
+
+  /* -------------------------------------------------------- výběr mikrofonu */
+
+  // Bez udělené permission vrací prohlížeč zařízení s prázdnými labely —
+  // teprve po getUserMedia se dá vypsat, který mikrofon je který.
+  async function listMics(preferId) {
+    let devices = [];
+    try {
+      devices = (await navigator.mediaDevices.enumerateDevices())
+        .filter((d) => d.kind === 'audioinput');
+    } catch {
+      els.micSelect.innerHTML = '<option value="">Zařízení nelze načíst</option>';
+      return;
+    }
+
+    if (!devices.length) {
+      els.micSelect.innerHTML = '<option value="">Žádný mikrofon</option>';
+      return;
+    }
+
+    const unnamed = devices.every((d) => !d.label);
+    els.micSelect.innerHTML = '';
+
+    const none = new Option('Bez mikrofonu (jen obraz)', 'none');
+    els.micSelect.add(none);
+
+    devices.forEach((d, i) => {
+      els.micSelect.add(new Option(d.label || `Mikrofon ${i + 1}`, d.deviceId));
+    });
+
+    const wanted = preferId || prefs.micId;
+    if (wanted && [...els.micSelect.options].some((o) => o.value === wanted)) {
+      els.micSelect.value = wanted;
+    } else {
+      els.micSelect.selectedIndex = 1;
+    }
+
+    if (unnamed) {
+      els.micHint.innerHTML =
+        'Prohlížeč zatím neprozradil názvy mikrofonů. Klikni na <strong>Vyzkoušet</strong> ' +
+        '— po povolení přístupu se seznam doplní.';
+    }
+  }
+
+  /* ------------------------------------------------------- ukazatel hlasitosti */
+
+  function stopMeter() {
+    cancelAnimationFrame(meterRaf);
+    meterRaf = 0;
+    meterStream?.getTracks().forEach((t) => t.stop());
+    meterStream = null;
+    els.meterBar.style.width = '0%';
+    els.micTest.textContent = 'Vyzkoušet';
+  }
+
+  async function startMeter() {
+    const id = els.micSelect.value;
+    if (id === 'none') {
+      say('Mikrofon je vypnutý — přepni ho v seznamu.', 'warn');
       return;
     }
 
     try {
-      mic = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
+      meterStream = await navigator.mediaDevices.getUserMedia({ audio: micConstraint(id) });
     } catch (err) {
-      say('Mikrofon není dostupný — nahrávám bez komentáře.', 'warn');
-      mic = null;
+      say('Mikrofon se nepodařilo otevřít: ' + err.name, 'error');
+      return;
     }
 
-    const combined = new MediaStream([
-      ...display.getVideoTracks(),
-      ...(mic ? mic.getAudioTracks() : []),
-    ]);
-    tracks = combined.getTracks();
+    // Labely jsou k dispozici až teď — seznam přepíšeme, ať jsou vidět názvy.
+    await listMics(id);
 
-    preview.hidden = false;
-    preview.srcObject = new MediaStream(display.getVideoTracks());
-    preview.play().catch(() => {});
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.resume();
+
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    audioCtx.createMediaStreamSource(meterStream).connect(analyser);
+
+    const buf = new Float32Array(analyser.fftSize);
+    els.micTest.textContent = 'Zastavit zkoušku';
+
+    const tick = () => {
+      analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (const v of buf) sum += v * v;
+      const rms = Math.sqrt(sum / buf.length);
+      els.meterBar.style.width = Math.min(100, rms * 400).toFixed(1) + '%';
+      meterRaf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  els.micTest.addEventListener('click', () => (meterStream ? stopMeter() : startMeter()));
+
+  const micConstraint = (deviceId) => ({
+    deviceId: deviceId ? { exact: deviceId } : undefined,
+    echoCancellation: true,
+    noiseSuppression: true,
+  });
+
+  /* ------------------------------------------------------------- nahrávání */
+
+  const pickMimeType = () => [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+
+  els.start.addEventListener('click', async () => {
+    els.start.disabled = true;
+    stopMeter();
+    savePrefs();
+    say('Vyber zdroj v dialogu prohlížeče…');
+
+    let display;
+    try {
+      display = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          // Jen předvolba dialogu — uživatel může vybrat cokoli jiného.
+          displaySurface: els.surface.value,
+        },
+        // Zvuk plochy si vyžádáme, jen když o něj uživatel stojí; jinak by
+        // dialog zbytečně nabízel zaškrtávátko, které stejně nechceme.
+        audio: els.wantSystemAudio.checked
+          ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+          : false,
+        systemAudio: els.wantSystemAudio.checked ? 'include' : 'exclude',
+        selfBrowserSurface: els.excludeSelf.checked ? 'exclude' : 'include',
+        surfaceSwitching: 'include',
+      });
+    } catch (err) {
+      els.start.disabled = false;
+      say(err.name === 'NotAllowedError'
+        ? 'Výběr zdroje zrušen.'
+        : 'Obraz se nepodařilo zachytit: ' + err.message, 'error');
+      return;
+    }
+
+    // Mikrofon až po výběru zdroje — kdyby uživatel dialog zrušil, ať mu
+    // zbytečně nesvítí kontrolka nahrávání.
+    let mic = null;
+    const micId = els.micSelect.value;
+    // Prázdné deviceId znamená "zatím bez permission" — pak bereme výchozí
+    // zařízení. Vypnutý mikrofon je jen explicitní volba 'none'.
+    if (micId !== 'none') {
+      try {
+        mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraint(micId) });
+      } catch (err) {
+        say('Mikrofon není dostupný (' + err.name + ') — nahrávám bez komentáře.', 'warn');
+      }
+    }
+
+    const displayAudio = display.getAudioTracks();
+    const audioTrack = buildAudioTrack(mic, displayAudio);
+
+    const videoTrack = display.getVideoTracks()[0];
+    const combined = new MediaStream(audioTrack ? [videoTrack, audioTrack] : [videoTrack]);
+
+    // Držíme si i původní tracky, ať je na konci zavřeme úplně všechny.
+    liveTracks = [videoTrack, ...displayAudio, ...(mic ? mic.getTracks() : [])];
+    if (audioTrack) liveTracks.push(audioTrack);
+
+    reportSources(videoTrack, mic, displayAudio);
+
+    els.preview.hidden = false;
+    els.preview.srcObject = new MediaStream([videoTrack]);
+    els.preview.play().catch(() => {});
 
     chunks = [];
     const mimeType = pickMimeType();
@@ -87,26 +224,70 @@
 
     startedAt = Date.now();
     timerId = setInterval(tick, 250);
+    videoTrack.addEventListener('ended', stop); // nativní pruh „Stop sharing"
 
-    // Uživatel může nahrávání ukončit i nativním „Stop sharing" pruhem.
-    display.getVideoTracks()[0].addEventListener('ended', () => stop());
-
-    stopBtn.disabled = false;
+    els.stop.disabled = false;
     say('Nahrávám…', 'rec');
   });
 
+  /** Mikrofon + zvuk plochy je potřeba smíchat — MediaRecorder bere jednu stopu. */
+  function buildAudioTrack(mic, displayAudio) {
+    const micTracks = mic ? mic.getAudioTracks() : [];
+    if (!micTracks.length && !displayAudio.length) return null;
+
+    // Jeden zdroj -> žádné míchání, ať do cesty nelezeme resamplingem navíc.
+    if (micTracks.length && !displayAudio.length) return micTracks[0];
+    if (!micTracks.length && displayAudio.length) return displayAudio[0];
+
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    const dest = audioCtx.createMediaStreamDestination();
+    audioCtx.createMediaStreamSource(new MediaStream(micTracks)).connect(dest);
+    audioCtx.createMediaStreamSource(new MediaStream(displayAudio)).connect(dest);
+
+    return dest.stream.getAudioTracks()[0];
+  }
+
+  /** Ať je po startu vidět, co se doopravdy chytlo — ne co bylo zaškrtnuté. */
+  function reportSources(videoTrack, mic, displayAudio) {
+    const surfaceNames = {
+      monitor: 'celá obrazovka', window: 'okno aplikace', browser: 'karta prohlížeče',
+    };
+    const s = videoTrack.getSettings?.() || {};
+    const parts = ['Obraz: ' + (surfaceNames[s.displaySurface] || 'sdílená plocha')];
+
+    parts.push('Mikrofon: ' + (mic
+      ? (mic.getAudioTracks()[0].label || 'zapnutý')
+      : 'vypnutý'));
+
+    if (els.wantSystemAudio.checked) {
+      parts.push('Zvuk plochy: ' + (displayAudio.length
+        ? 'zachycen'
+        : 'nedorazil (systém ho nenabídl)'));
+    }
+
+    els.sources.textContent = parts.join(' · ');
+    els.sources.hidden = false;
+  }
+
+  const tick = () => {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    els.timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  };
+
   const stop = () => {
     if (!recorder || recorder.state === 'inactive') return;
-    stopBtn.disabled = true;
+    els.stop.disabled = true;
     clearInterval(timerId);
     recorder.stop();
   };
 
-  stopBtn.addEventListener('click', stop);
+  els.stop.addEventListener('click', stop);
 
   async function finish(mimeType) {
     const durationMs = Date.now() - startedAt;
-    stopAllTracks();
+    liveTracks.forEach((t) => t.stop());
+    liveTracks = [];
+    els.preview.srcObject = null;
 
     const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
     chunks = [];
@@ -121,15 +302,17 @@
       console.error(err);
       say('Upload selhal: ' + err.message + ' — záznam zůstal jen v prohlížeči.', 'error');
       offerDownload(blob);
-      startBtn.disabled = false;
+      els.start.disabled = false;
     }
   }
+
+  /* --------------------------------------------------------------- upload */
 
   async function createRecording() {
     const res = await fetch('/api/recordings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF },
-      body: JSON.stringify({ title: $('title').value }),
+      body: JSON.stringify({ title: els.title.value }),
     });
     if (!res.ok) throw new Error('server odmítl založit záznam (' + res.status + ')');
     return res.json();
@@ -138,14 +321,14 @@
   // XHR kvůli progressu — fetch upload progress zatím není všude.
   function uploadBlob(url, blob) {
     return new Promise((resolve, reject) => {
-      progressWrap.hidden = false;
+      els.progressWrap.hidden = false;
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', url, true);
       xhr.setRequestHeader('Content-Type', 'video/webm');
       xhr.upload.onprogress = (e) => {
         if (!e.lengthComputable) return;
         const pct = Math.round((e.loaded / e.total) * 100);
-        progressBar.style.width = pct + '%';
+        els.progressBar.style.width = pct + '%';
         say(`Nahrávám do úložiště… ${pct} %`);
       };
       xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
@@ -166,7 +349,7 @@
   }
 
   function showDone(shareUrl) {
-    progressWrap.hidden = true;
+    els.progressWrap.hidden = true;
     say('Nahráno.', 'ok');
     $('shareUrl').value = shareUrl;
     $('done').hidden = false;
@@ -179,6 +362,16 @@
     a.download = 'ratatosk-zaznam.webm';
     a.textContent = 'Stáhnout záznam do počítače';
     a.className = 'btn';
-    stateEl.after(a);
+    els.state.after(a);
+  }
+
+  /* ----------------------------------------------------------------- start */
+
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    els.start.disabled = true;
+    say('Tenhle prohlížeč neumí zachytit obrazovku. Zkus Chrome nebo Firefox přes HTTPS.', 'error');
+  } else {
+    listMics();
+    navigator.mediaDevices.addEventListener?.('devicechange', () => listMics(els.micSelect.value));
   }
 })();

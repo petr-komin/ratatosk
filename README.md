@@ -28,6 +28,27 @@ kolega:  GET /w/<128bit id> ──────▶ MP4 přímo z veřejné R2 dom
 Server není v datové cestě uploadu ani přehrávání. V klidu neběží žádný PHP
 proces — jen fpm master.
 
+## Výběr zdrojů
+
+**Obraz si stránka vybrat nesmí.** `getDisplayMedia` vždy otevře systémový
+dialog a zdroj v něm klikne uživatel — je to bezpečnostní omezení prohlížeče,
+obejít se nedá. Formulář proto nabízí jen *předvolbu* (karta / okno / celá
+obrazovka), kterou dialog předvybere, plus možnost tuhle kartu z dialogu
+vyřadit, ať omylem nenatočíš samotný Ratatosk.
+
+**Zvuk vybrat jde.** Formulář vypíše dostupné mikrofony a umí konkrétní
+vynutit přes `deviceId`. Tlačítko *Vyzkoušet* rozhýbe ukazatel hlasitosti —
+zároveň je to způsob, jak si vyžádat permission, bez které prohlížeč názvy
+zařízení vůbec neprozradí.
+
+Volitelně jde přibrat i zvuk sdílené plochy. Když dorazí obojí, smíchají se
+přes Web Audio API do jedné stopy, protože `MediaRecorder` víc zvukových stop
+nepobere. Jestli se zvuk plochy vůbec připojí, rozhoduje prohlížeč a systém
+(zvuk karty umí spolehlivě Chrome, systémový zvuk na Linuxu často vůbec) —
+po startu proto UI vypíše, co se doopravdy chytlo, ne co bylo zaškrtnuté.
+
+Předvolby si stránka pamatuje v `localStorage`.
+
 ## Ochrana obsahu
 
 - **Čtení:** neuhádnutelný odkaz `/w/<32 hex znaků>` = 128 bitů náhody. Bez

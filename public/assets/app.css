@@ -19,6 +19,10 @@
 }
 
 * { box-sizing: border-box; }
+
+/* Autorské display pravidlo (třeba video{display:block}) jinak přebije
+   [hidden] z UA stylesheetu a prvek se ukáže i schovaný. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--bg);
@@ -106,3 +110,30 @@ video { display: block; width: 100%; margin-top: 1rem; background: #000; border-
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+/* --- formulář zdrojů ----------------------------------------------------- */
+
+.group {
+  margin: 1.25rem 0; padding: .9rem 1rem 1rem;
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.group legend { padding: 0 .4rem; font-size: .8125rem; font-weight: 600;
+                text-transform: uppercase; letter-spacing: .04em; color: var(--dim); }
+
+.row { display: flex; align-items: center; gap: .75rem; margin: .5rem 0; }
+.row select { flex: 1; min-width: 0; }
+
+select {
+  padding: .45rem .6rem; font: inherit; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+}
+
+.check { display: flex; align-items: flex-start; gap: .5rem; margin: .6rem 0;
+         color: var(--fg); font-size: .9375rem; }
+.check input { margin-top: .25rem; flex: none; }
+
+.hint { margin: .4rem 0 .2rem; font-size: .8125rem; line-height: 1.5; color: var(--dim); }
+
+.meterRow { display: flex; align-items: center; gap: .75rem; margin: .5rem 0; }
+.meter { flex: 1; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.meter > div { height: 100%; width: 0; background: var(--ok); transition: width .06s linear; }
