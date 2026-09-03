@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title ?? 'Ratatosk') ?> — Ratatosk</title>
 <link rel="icon" href="/assets/ratatosk.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="<?= e(asset_url('/assets/app.css')) ?>">
 </head>
 <body>
 <header class="topbar">

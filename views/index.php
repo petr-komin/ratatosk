@@ -43,5 +43,5 @@
     <?php endforeach; ?>
     </tbody>
 </table>
-<script src="/assets/copy.js"></script>
+<script src="<?= e(asset_url('/assets/copy.js')) ?>"></script>
 <?php endif; ?>

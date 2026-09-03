@@ -94,5 +94,5 @@
 </div>
 
 <script>window.CSRF = <?= json_encode(csrf_token()) ?>;</script>
-<script src="/assets/record.js"></script>
-<script src="/assets/copy.js"></script>
+<script src="<?= e(asset_url('/assets/record.js')) ?>"></script>
+<script src="<?= e(asset_url('/assets/copy.js')) ?>"></script>

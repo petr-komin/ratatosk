@@ -34,6 +34,21 @@ function render(string $view, array $vars = []): void
     require __DIR__ . '/../views/layout.php';
 }
 
+/**
+ * URL statického souboru s ?v=<mtime> na konci. Nginx má na /assets/
+ * dlouhou cache (viz nginx.example.conf) — bez tohohle by po každém
+ * nasazení nové CSS/JS zůstávala prohlížečům stará verze až týden.
+ * Mění se cesta v HTML, ne obsah souboru, takže žádné invalidace navíc
+ * netřeba.
+ */
+function asset_url(string $path): string
+{
+    $file = __DIR__ . '/../public' . $path;
+    $v = is_file($file) ? filemtime($file) : time();
+
+    return $path . '?v=' . $v;
+}
+
 function share_url(string $id): string
 {
     return rtrim(env('APP_URL'), '/') . '/w/' . $id;

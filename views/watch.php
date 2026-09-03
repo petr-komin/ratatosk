@@ -38,7 +38,7 @@
     <?php endif; ?>
     </div>
 
-    <script src="/assets/watch.js"></script>
+    <script src="<?= e(asset_url('/assets/watch.js')) ?>"></script>
 
 <?php endif; ?>
 
