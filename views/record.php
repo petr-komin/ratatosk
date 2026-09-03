@@ -71,8 +71,15 @@
     <div class="controls">
         <button class="btn btn-primary" id="start">Spustit nahrávání</button>
         <button class="btn" id="stop" disabled>Zastavit</button>
+        <button class="btn btn-quiet" id="popOut" type="button" hidden
+                title="Otevře malé okno se stopkami a tlačítkem Zastavit, které zůstane nad ostatními okny na ploše.">
+            Vystrčit ovládání
+        </button>
         <span id="timer" class="timer">0:00</span>
     </div>
+    <p id="pipNotice" class="hint" hidden>
+        Ovládání běží v plovoucím okně — najdeš ho na ploše nad ostatními okny.
+    </p>
 
     <p id="state" class="state"></p>
     <p id="sources" class="hint" hidden></p>

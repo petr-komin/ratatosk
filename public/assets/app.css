@@ -165,3 +165,11 @@ select {
 .readyNote { margin-top: 1rem; padding: .75rem 1rem; border-radius: 8px;
              background: var(--bg); border: 1px solid var(--line); }
 .readyNote p { margin: 0; font-size: .875rem; }
+
+/* Plovoucí okno se stopkami a stopem (Document Picture-in-Picture) —
+   styl se do něj kopíruje za běhu z hlavní stránky, viz record.js. */
+.pip-box {
+  display: flex; align-items: center; justify-content: center; gap: .9rem;
+  height: 100vh; padding: 0 1rem;
+}
+.pip-box .timer { font-size: 1.15rem; }

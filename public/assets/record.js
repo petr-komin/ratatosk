@@ -10,11 +10,13 @@
     micSelect: $('micSelect'), micTest: $('micTest'), micHint: $('micHint'),
     micCount: $('micCount'), permNote: $('permNote'), micPerm: $('micPerm'),
     meterBar: $('meterBar'), wantSystemAudio: $('wantSystemAudio'),
-    title: $('title'),
+    title: $('title'), popOut: $('popOut'), pipNotice: $('pipNotice'),
   };
 
+  let pipWindow = null;
+
   const PREFS = 'ratatosk.prefs';
-  let recorder = null, chunks = [], startedAt = 0, timerId = null;
+  let recorder = null, chunks = [], startedAt = 0, timerId = null, isRecording = false;
   let liveTracks = [], audioCtx = null, meterStream = null, meterRaf = 0;
 
   const say = (msg, cls = '') => {
@@ -248,6 +250,7 @@
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     recorder.onstop = () => finish(mimeType);
     recorder.start(1000);
+    isRecording = true;
 
     startedAt = Date.now();
     timerId = setInterval(tick, 250);
@@ -255,6 +258,7 @@
 
     els.stop.disabled = false;
     say('Nahrávám…', 'rec');
+    if ('documentPictureInPicture' in window) els.popOut.hidden = false;
   });
 
   /** Mikrofon + zvuk plochy je potřeba smíchat — MediaRecorder bere jednu stopu. */
@@ -303,12 +307,79 @@
 
   const stop = () => {
     if (!recorder || recorder.state === 'inactive') return;
+    isRecording = false;
     els.stop.disabled = true;
     clearInterval(timerId);
+    if (pipWindow) pipWindow.close(); // spustí closePip() přes 'pagehide'
     recorder.stop();
   };
 
   els.stop.addEventListener('click', stop);
+
+  /* --------------------------------------- plovoucí okno se stopkami a stopem
+   *
+   * Chrome umí vystrčit kus stránky do vlastního okna, které zůstává nad
+   * ostatními okny na ploše — hodí se, když se při nahrávání přepneš jinam
+   * a nechceš pak hledat kartu s Ratatoskem, aby ses dostal k tlačítku
+   * Zastavit. Přesouváme SKUTEČNÉ prvky (ne kopie), takže časovač i tlačítko
+   * fungují úplně stejně jako na stránce — žádná duplicitní logika.
+   *
+   * Chrome tohle okno záměrně vylučuje z toho, co se nahrává (je to
+   * zdokumentovaný účel API — ovládání, co zůstane vidět, ale nezanáší se
+   * do záznamu).
+   */
+  els.popOut.addEventListener('click', async () => {
+    if (pipWindow) return;
+    try {
+      pipWindow = await documentPictureInPicture.requestWindow({ width: 260, height: 108 });
+    } catch (err) {
+      say('Plovoucí okno se nepodařilo otevřít: ' + err.message, 'warn');
+      return;
+    }
+
+    pipWindow.document.title = 'Ratatosk — nahrávám';
+    copyStylesInto(pipWindow.document);
+
+    const box = pipWindow.document.createElement('div');
+    box.className = 'pip-box';
+    pipWindow.document.body.appendChild(box);
+    box.appendChild(els.timer);
+    box.appendChild(els.stop);
+
+    els.popOut.hidden = true;
+    els.pipNotice.hidden = false;
+
+    pipWindow.addEventListener('pagehide', closePip, { once: true });
+  });
+
+  function closePip() {
+    if (!pipWindow) return;
+    const controls = document.querySelector('.controls');
+    controls.insertBefore(els.timer, els.popOut);
+    controls.insertBefore(els.stop, els.popOut);
+    pipWindow = null;
+    els.pipNotice.hidden = true;
+    // Nabídnout vystrčení znovu jen pokud nahrávání ještě běží.
+    if (isRecording) els.popOut.hidden = false;
+  }
+
+  /** Zkopíruje styly appky do plovoucího okna, ať tlačítko a časovač vypadají stejně. */
+  function copyStylesInto(doc) {
+    [...document.styleSheets].forEach((sheet) => {
+      try {
+        const css = [...sheet.cssRules].map((r) => r.cssText).join('');
+        const style = doc.createElement('style');
+        style.textContent = css;
+        doc.head.appendChild(style);
+      } catch {
+        if (!sheet.href) return;
+        const link = doc.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = sheet.href;
+        doc.head.appendChild(link);
+      }
+    });
+  }
 
   async function finish(mimeType) {
     const durationMs = Date.now() - startedAt;
