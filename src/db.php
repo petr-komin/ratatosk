@@ -21,5 +21,9 @@ function db(): PDO
         PDO::ATTR_EMULATE_PREPARES   => false,
     ]);
 
+    // Ať i to, co vrátí databáze, mluví v naší zóně — jinak se člověk při
+    // ručním dotazu diví, proč jsou časy o dvě hodiny jinde.
+    $pdo->exec("SET TIME ZONE '" . str_replace("'", '', env('APP_TIMEZONE', 'Europe/Prague')) . "'");
+
     return $pdo;
 }

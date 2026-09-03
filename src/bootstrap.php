@@ -9,4 +9,4 @@ require __DIR__ . '/db.php';
 require __DIR__ . '/s3.php';
 require __DIR__ . '/auth.php';
 
-date_default_timezone_set('Europe/Prague');
+date_default_timezone_set(env('APP_TIMEZONE', 'Europe/Prague'));

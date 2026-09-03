@@ -2,7 +2,7 @@
     <h1><?= e($rec['title']) ?></h1>
     <p class="dim">
         Nahrál <?= e($rec['author']) ?>,
-        <?= e((new DateTimeImmutable($rec['created_at']))->format('j. n. Y H:i')) ?>
+        <?= e(format_dt($rec['created_at'])) ?>
     </p>
 
     <?php if ($rec['status'] === 'ready' && $videoUrl): ?>

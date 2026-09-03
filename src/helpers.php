@@ -39,6 +39,23 @@ function share_url(string $id): string
     return rtrim(env('APP_URL'), '/') . '/w/' . $id;
 }
 
+/**
+ * Postgres vrací timestamptz i s offsetem (".. +00"), který DateTimeImmutable
+ * převezme a nechá být — bez explicitního převodu by se čas zobrazoval v UTC,
+ * i když má appka nastavenou českou zónu. Uloženo je to správně, jen se to
+ * musí přepočítat na zobrazení.
+ */
+function format_dt(?string $ts, string $format = 'j. n. Y H:i'): string
+{
+    if (!$ts) {
+        return '—';
+    }
+
+    return (new DateTimeImmutable($ts))
+        ->setTimezone(new DateTimeZone(date_default_timezone_get()))
+        ->format($format);
+}
+
 function format_bytes(?int $bytes): string
 {
     if (!$bytes) {

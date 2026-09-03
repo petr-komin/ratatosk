@@ -18,7 +18,7 @@
                 <?php endif; ?>
             </td>
             <td class="dim"><?= e($r['author']) ?></td>
-            <td class="dim"><?= e((new DateTimeImmutable($r['created_at']))->format('j. n. Y H:i')) ?></td>
+            <td class="dim"><?= e(format_dt($r['created_at'])) ?></td>
             <td class="dim"><?= e(format_duration($r['duration_ms'] === null ? null : (int) $r['duration_ms'])) ?></td>
             <td>
                 <span class="status status-<?= e($r['status']) ?>">
