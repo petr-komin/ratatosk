@@ -32,3 +32,16 @@ CREATE TABLE IF NOT EXISTS recordings (
 
 CREATE INDEX IF NOT EXISTS recordings_status_idx  ON recordings (status, created_at);
 CREATE INDEX IF NOT EXISTS recordings_user_idx    ON recordings (user_id, created_at DESC);
+
+-- Neúspěšné pokusy o přihlášení, kvůli jednoduchému throttlingu.
+-- identifier je "email:<adresa>" nebo "ip:<adresa>" — jeden řádek na
+-- pokus, počítá se v klouzavém okně, staré řádky se průběžně mažou
+-- (viz record_login_failure() v src/auth.php), takže tabulka neroste
+-- bez omezení.
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id           BIGSERIAL PRIMARY KEY,
+    identifier   TEXT        NOT NULL,
+    attempted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS login_attempts_lookup_idx ON login_attempts (identifier, attempted_at);

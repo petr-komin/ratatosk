@@ -61,6 +61,11 @@ Předvolby si stránka pamatuje v `localStorage`.
   přihlášení, aby kolega nic neřešil.
 - **Zápis:** jen přihlášený účet. Registrace je zavřená zvacím kódem
   (`INVITE_CODE` v `.env`), takže si účet nezaloží kdokoli z internetu.
+- **Přihlášení je throttlované** — nezávisle podle e-mailu (8 pokusů /
+  15 min) i podle IP (20 pokusů / 15 min), ať se heslo nedá jen tak zkoušet
+  donekonečna. Stav se drží v Postgresu, nic navíc se neinstaluje.
+- **Celá appka je `noindex`** (meta tag + `robots.txt`) — ochrana `/w/<id>`
+  stojí na neuhádnutelnosti URL, ne na tom, že by ji našel Google.
 - U každého záznamu je vidět **kdo a kdy** ho nahrál.
 
 ## Instalace
@@ -188,6 +193,23 @@ dělat, skončí za pár milisekund.
 Otevři `https://ratatosk.example.com/register` a zaregistruj se zvacím kódem
 z `.env`. Kolegovi pošli ten kód, ne heslo.
 
+### 8. Denní záloha databáze
+
+```cron
+30 3 * * * /srv/ratatosk/bin/backup-db.sh >> /srv/ratatosk/backup.log 2>&1
+```
+
+`pg_dump` běží přímo na hostu (tam, kde běží Postgres), ne v kontejneru.
+Zálohy (`backups/*.sql.gz`) se drží 30 dní a pak se samy mažou. Leží jen
+na tomhle serveru — pro skutečnou odolnost proti výpadku disku je stojí za
+to občas stáhnout jinam.
+
+### 9. Rotace `worker.log`
+
+```bash
+sudo install -m 644 -o root -g root ratatosk.logrotate /etc/logrotate.d/ratatosk
+```
+
 ## Lokální testování
 
 nginx k tomu potřeba není — na localhostu jede vestavěný PHP server a Postgres
@@ -246,9 +268,15 @@ Cíl je `manx@a4.arthur.city:/home/manx/ratatosk`, dá se přebít přes
 `DEPLOY_HOST` a `DEPLOY_DIR`.
 
 Skript ověří prostředí (docker, compose, Postgres, místo na disku), přenese
-kód rsyncem, postaví a nastartuje kontejner, spustí migraci a přidá cron na
-workera. **`.env` na serveru nikdy nepřepíše** — při prvním běhu ho založí
+kód rsyncem, postaví a nastartuje kontejner, spustí migraci, přidá cron na
+workera i na denní zálohu databáze a zkontroluje rotaci `worker.log`.
+**`.env` na serveru nikdy nepřepíše** — při prvním běhu ho založí
 z `.env.example` a zastaví se, aby ses k němu dostal.
+
+Cron i logrotate zkouší nejdřív uživatelský `crontab`; když to na daném
+stroji nejde (rozhozená oprávnění `/usr/bin/crontab` k tomu apod.),
+připraví soubor pro `/etc/cron.d` nebo `/etc/logrotate.d` a vypíše přesný
+instalační příkaz — schválně to nedělá potichu přes `sudo`.
 
 Schválně nedělá to, co patří rootovi:
 
@@ -259,6 +287,7 @@ Schválně nedělá to, co patří rootovi:
   jinak se tam nginx neprokouše
 - **certifikát** (`certbot --nginx -d <doména>`)
 - **CORS** na R2 bucketu pro produkční origin
+- instalaci cron/logrotate souborů, které skript jen připraví (viz výš)
 
 ## Provoz
 

@@ -2,3 +2,4 @@
 .env
 *.log
 CLAUDE.md
+backups/

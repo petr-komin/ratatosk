@@ -64,6 +64,50 @@ function logout_user(): void
     session_destroy();
 }
 
+/** ---------------------------------------------------- throttling přihlášení
+ *
+ * Žádná fronta ani cache navíc — appka i tak jede přes Postgres, tak i
+ * tohle. Počítá se v klouzavém okně přes obyčejný COUNT, staré řádky se
+ * příležitostně mažou (viz record_login_failure), ať tabulka neroste
+ * bez omezení ani pod útokem.
+ *
+ * Pozor: identifikátor IP bere $_SERVER['REMOTE_ADDR'], což je adresa,
+ * kterou vidí nginx. Za obráceným proxy (např. Cloudflare v proxy
+ * režimu) by tu byla adresa proxy, ne klienta — pak by šlo o throttling
+ * podle e-mailu, ne podle IP.
+ */
+const LOGIN_MAX_PER_EMAIL = 8;
+const LOGIN_MAX_PER_IP    = 20;
+const LOGIN_WINDOW        = '15 minutes';
+
+function login_is_throttled(string $email, string $ip): bool
+{
+    $stmt = db()->prepare(
+        "SELECT
+            (SELECT count(*) FROM login_attempts
+              WHERE identifier = ? AND attempted_at > now() - interval '" . LOGIN_WINDOW . "') AS by_email,
+            (SELECT count(*) FROM login_attempts
+              WHERE identifier = ? AND attempted_at > now() - interval '" . LOGIN_WINDOW . "') AS by_ip"
+    );
+    $stmt->execute(['email:' . $email, 'ip:' . $ip]);
+    $row = $stmt->fetch();
+
+    return (int) $row['by_email'] >= LOGIN_MAX_PER_EMAIL
+        || (int) $row['by_ip'] >= LOGIN_MAX_PER_IP;
+}
+
+function record_login_failure(string $email, string $ip): void
+{
+    db()->prepare('INSERT INTO login_attempts (identifier) VALUES (?), (?)')
+        ->execute(['email:' . $email, 'ip:' . $ip]);
+
+    // Náhodou, ať na to není potřeba zvláštní cron — postačí, když se
+    // tabulka čas od času uklidí sama.
+    if (random_int(1, 50) === 1) {
+        db()->exec("DELETE FROM login_attempts WHERE attempted_at < now() - interval '1 day'");
+    }
+}
+
 /** ------------------------------------------------------------------ CSRF */
 
 function csrf_token(): string

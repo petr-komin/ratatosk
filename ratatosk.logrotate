@@ -1,0 +1,14 @@
+# Ratatosk — rotace logu workera. Instalace jako root:
+#   sudo install -m 644 -o root -g root ratatosk.logrotate /etc/logrotate.d/ratatosk
+#
+# Worker přes cron otvírá soubor znovu při každém běhu (`>> worker.log`),
+# takže obyčejná rotace stačí — žádný proces ho nedrží dlouhodobě otevřený.
+
+/home/manx/ratatosk/worker.log {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+    create 0640 manx manx
+}

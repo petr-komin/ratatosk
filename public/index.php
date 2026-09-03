@@ -90,14 +90,25 @@ function route_login_form(): void
 function route_login(): void
 {
     csrf_check();
-    $email    = trim((string) ($_POST['email'] ?? ''));
+    $email    = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
     $password = (string) ($_POST['password'] ?? '');
+    $ip       = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+
+    if (login_is_throttled($email, $ip)) {
+        http_response_code(429);
+        render('login', [
+            'title' => 'Přihlášení',
+            'error' => 'Příliš mnoho pokusů o přihlášení. Zkus to prosím za pár minut.',
+        ]);
+        return;
+    }
 
     $stmt = db()->prepare('SELECT id, password_hash FROM users WHERE email = ?');
-    $stmt->execute([mb_strtolower($email)]);
+    $stmt->execute([$email]);
     $row = $stmt->fetch();
 
     if (!$row || !password_verify($password, $row['password_hash'])) {
+        record_login_failure($email, $ip);
         http_response_code(401);
         render('login', ['title' => 'Přihlášení', 'error' => 'Špatný e-mail nebo heslo.']);
         return;

@@ -214,6 +214,35 @@ EOF"
     CRON_PENDING=1
 fi
 
+bold "8. Denní záloha databáze"
+
+BACKUP_CRON="30 3 * * * $DIR/bin/backup-db.sh >> $DIR/backup.log 2>&1"
+
+if remote "crontab -l 2>/dev/null | grep -Fq backup-db.sh"; then
+    ok "cron na zálohu už je nastavený"
+elif remote "test -f /etc/cron.d/ratatosk-backup"; then
+    ok "/etc/cron.d/ratatosk-backup už existuje"
+elif remote "( crontab -l 2>/dev/null; echo '# ratatosk backup'; echo '$BACKUP_CRON' ) | crontab -" 2>/dev/null; then
+    ok "cron na zálohu přidán (denně ve 3:30, drží 30 dní)"
+else
+    remote "cat > '$DIR/ratatosk-backup.cron' <<EOF
+# Ratatosk — denní záloha databáze (pg_dump, drží se 30 dní).
+30 3 * * * $CRON_USER $DIR/bin/backup-db.sh >> $DIR/backup.log 2>&1
+EOF"
+    warn "uživatelský crontab nejde použít, připravil jsem $DIR/ratatosk-backup.cron"
+    warn "  nainstaluj jako root: sudo install -m 644 -o root -g root $DIR/ratatosk-backup.cron /etc/cron.d/ratatosk-backup"
+    BACKUP_CRON_PENDING=1
+fi
+
+bold "9. Rotace worker.log"
+
+if remote "test -f /etc/logrotate.d/ratatosk"; then
+    ok "logrotate už je nastavený"
+else
+    warn "logrotate pro worker.log ještě není nainstalovaný"
+    LOGROTATE_PENDING=1
+fi
+
 # ---------------------------------------------------------------- shrnutí
 
 echo
@@ -223,9 +252,17 @@ echo
 bold "Zbývá udělat ručně (jako root):"
 n=1
 if [ "${CRON_PENDING:-0}" = "1" ]; then
-    echo "  $n. cron   — sudo install -m 644 -o root -g root $DIR/ratatosk.cron /etc/cron.d/ratatosk"
+    echo "  $n. cron worker  — sudo install -m 644 -o root -g root $DIR/ratatosk.cron /etc/cron.d/ratatosk"
     n=$((n+1))
 fi
-echo "  $n. nginx  — vzor v $DIR/nginx.example.conf, uprav server_name a \$app_root=$DIR"; n=$((n+1))
-echo "  $n. TLS    — certbot --nginx -d <doména>"; n=$((n+1))
-echo "  $n. CORS   — do R2 bucketu přidej origin z APP_URL, jinak upload z prohlížeče spadne"
+if [ "${BACKUP_CRON_PENDING:-0}" = "1" ]; then
+    echo "  $n. cron zálohy  — sudo install -m 644 -o root -g root $DIR/ratatosk-backup.cron /etc/cron.d/ratatosk-backup"
+    n=$((n+1))
+fi
+if [ "${LOGROTATE_PENDING:-0}" = "1" ]; then
+    echo "  $n. logrotate    — sudo install -m 644 -o root -g root $DIR/ratatosk.logrotate /etc/logrotate.d/ratatosk"
+    n=$((n+1))
+fi
+echo "  $n. nginx        — vzor v $DIR/nginx.example.conf, uprav server_name a \$app_root=$DIR"; n=$((n+1))
+echo "  $n. TLS          — certbot --nginx -d <doména>"; n=$((n+1))
+echo "  $n. CORS         — do R2 bucketu přidej origin z APP_URL, jinak upload z prohlížeče spadne"
