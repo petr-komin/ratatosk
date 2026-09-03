@@ -189,12 +189,29 @@ fi
 
 bold "7. Cron na překódování"
 
-CRON="* * * * * cd $DIR && /usr/bin/docker compose exec -T app php bin/worker.php >> $DIR/worker.log 2>&1"
-if remote "crontab -l 2>/dev/null | grep -Fq 'ratatosk'" ; then
-    ok "cron už je nastavený"
-else
-    remote "( crontab -l 2>/dev/null; echo '# ratatosk worker'; echo '$CRON' ) | crontab -"
+CRON_LINE="* * * * * cd $DIR && /usr/bin/docker compose exec -T app php bin/worker.php >> $DIR/worker.log 2>&1"
+CRON_USER=$(remote 'id -un')
+
+if remote "crontab -l 2>/dev/null | grep -Fq ratatosk"; then
+    ok "cron uživatele už je nastavený"
+elif remote "sudo -n test -f /etc/cron.d/ratatosk" 2>/dev/null \
+     || remote "test -f /etc/cron.d/ratatosk"; then
+    ok "/etc/cron.d/ratatosk už existuje"
+elif remote "( crontab -l 2>/dev/null; echo '# ratatosk worker'; echo '$CRON_LINE' ) | crontab -" 2>/dev/null; then
     ok "cron přidán (každou minutu, flock drží jeden ffmpeg naráz)"
+else
+    # Na některých strojích nemá uživatel na crontab právo (rozházené
+    # skupiny u /usr/bin/crontab). Připravíme soubor pro /etc/cron.d,
+    # ten patří rootovi a je to stejně čistější řešení.
+    remote "cat > '$DIR/ratatosk.cron' <<EOF
+# Ratatosk — překódování WebM na MP4. Worker si drží flock,
+# takže naráz běží vždycky nanejvýš jeden ffmpeg.
+* * * * * $CRON_USER cd $DIR && /usr/bin/docker compose exec -T app php bin/worker.php >> $DIR/worker.log 2>&1
+EOF"
+    warn "uživatelský crontab na tomhle stroji nejde použít"
+    warn "  připravil jsem $DIR/ratatosk.cron, nainstaluj ho jako root:"
+    warn "    sudo install -m 644 -o root -g root $DIR/ratatosk.cron /etc/cron.d/ratatosk"
+    CRON_PENDING=1
 fi
 
 # ---------------------------------------------------------------- shrnutí
@@ -204,6 +221,11 @@ bold "Hotovo."
 remote "cd '$DIR' && docker compose ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
 echo
 bold "Zbývá udělat ručně (jako root):"
-echo "  1. nginx  — vzor v $DIR/nginx.example.conf, uprav server_name a \$app_root=$DIR"
-echo "  2. TLS    — certbot --nginx -d <doména>"
-echo "  3. CORS   — do R2 bucketu přidej origin z APP_URL, jinak upload z prohlížeče spadne"
+n=1
+if [ "${CRON_PENDING:-0}" = "1" ]; then
+    echo "  $n. cron   — sudo install -m 644 -o root -g root $DIR/ratatosk.cron /etc/cron.d/ratatosk"
+    n=$((n+1))
+fi
+echo "  $n. nginx  — vzor v $DIR/nginx.example.conf, uprav server_name a \$app_root=$DIR"; n=$((n+1))
+echo "  $n. TLS    — certbot --nginx -d <doména>"; n=$((n+1))
+echo "  $n. CORS   — do R2 bucketu přidej origin z APP_URL, jinak upload z prohlížeče spadne"
