@@ -318,6 +318,18 @@
 
     const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
     chunks = [];
+
+    // MediaRecorder umí vrátit prázdno (zdroj nedodal jediný snímek, zastavení
+    // hned po startu). Bez téhle pojistky by se do R2 uložil nulový soubor,
+    // uživatel by dostal odkaz a teprve worker by o hodinu později zjistil,
+    // že to není video.
+    if (blob.size === 0) {
+      say('Nahrávka je prázdná — zdroj nedodal žádná data. Zkus to prosím znovu.', 'error');
+      els.start.disabled = false;
+      els.sources.hidden = true;
+      return;
+    }
+
     say(`Nahráno ${(blob.size / 1048576).toFixed(1)} MB, nahrávám do úložiště…`);
 
     try {
