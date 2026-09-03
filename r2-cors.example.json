@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedOrigins": ["https://ratatosk.example.com"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["content-type"],
+    "ExposeHeaders": ["etag"],
+    "MaxAgeSeconds": 3600
+  }
+]

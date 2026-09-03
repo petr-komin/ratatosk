@@ -1,0 +1,27 @@
+services:
+  app:
+    build: .
+    image: ratatosk
+    container_name: ratatosk
+    restart: unless-stopped
+
+    # nginx běží na hostu → fastcgi_pass 127.0.0.1:9000.
+    # Vážeme jen na loopback, ať port nevisí do světa.
+    ports:
+      - "127.0.0.1:9000:9000"
+
+    # Postgres běží na hostu, mimo Docker.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    volumes:
+      # Kód sdílený s hostem — nginx z něj servíruje statiku pod stejnou cestou.
+      - .:/var/www/html
+      # Sezení ať přežijí restart kontejneru.
+      - sessions:/var/lib/php/sessions
+
+    # Idle stopa: jen fpm master. Strop je pojistka, ne rezervace.
+    mem_limit: 512m
+
+volumes:
+  sessions:

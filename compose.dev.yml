@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------------------
+# Lokální vývoj. Samostatný soubor, produkční docker-compose.yml se nepoužívá.
+#
+#   docker compose -f compose.dev.yml up --build
+#
+# Port se dá přehodit přes DEV_PORT v .env (8080 bývá obsazený něčím jiným).
+# Když ho změníš, přepiš i APP_URL — jde do sdílecích odkazů.
+#
+# Rozdíly proti produkci:
+#   - místo php-fpm + nginx jede vestavěný PHP server na :8080
+#   - Postgres je tady v kontejneru (na produkci běží na hostu)
+# ---------------------------------------------------------------------------
+
+services:
+  app:
+    build: .
+    container_name: ratatosk-dev
+    command: php -S 0.0.0.0:8080 -t /var/www/html/public /var/www/html/dev-server.php
+    environment:
+      # vestavěný server je jinak jednovláknový a polling na /w/ by ho zablokoval
+      PHP_CLI_SERVER_WORKERS: 4
+    ports:
+      - "127.0.0.1:${DEV_PORT:-8099}:8080"
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    container_name: ratatosk-dev-db
+    environment:
+      POSTGRES_DB: ratatosk
+      POSTGRES_USER: ratatosk
+      POSTGRES_PASSWORD: dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ratatosk"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - devdb:/var/lib/postgresql/data
+
+volumes:
+  devdb:
